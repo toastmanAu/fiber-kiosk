@@ -48,10 +48,12 @@ void fk_nav_to(FkScreen screen) {
 void fk_screens_refresh(void) {
     FkState snap = fk_state_snapshot();
     /* Refresh all screens' data labels (only visible one renders, but cheap) */
+    extern void pin_refresh(const FkState *);
     extern void home_refresh(const FkState *);
     extern void channels_refresh(const FkState *);
     extern void send_refresh(const FkState *);
     extern void receive_refresh(const FkState *);
+    pin_refresh(&snap);
     home_refresh(&snap);
     channels_refresh(&snap);
     send_refresh(&snap);
@@ -78,6 +80,7 @@ static void on_sigint(int sig) { (void)sig; s_running = 0; }
 
 /* ── Build all screens ──────────────────────────────────────────── */
 void fk_screens_init(void) {
+    extern lv_obj_t *pin_build(void);
     extern lv_obj_t *home_build(void);
     extern lv_obj_t *channels_build(void);
     extern lv_obj_t *send_build(void);
@@ -85,6 +88,7 @@ void fk_screens_init(void) {
     extern lv_obj_t *receive_build(void);
     extern lv_obj_t *signer_screen_build(void);
 
+    s_screens[SCREEN_PIN]      = pin_build();
     s_screens[SCREEN_HOME]     = home_build();
     s_screens[SCREEN_CHANNELS] = channels_build();
     s_screens[SCREEN_SEND]     = send_build();
@@ -139,8 +143,14 @@ int main(int argc, char *argv[]) {
     fk_bridge_poll();
     fk_screens_refresh();
 
-    /* Show home */
-    lv_scr_load(s_screens[SCREEN_HOME]);
+    /* Show PIN screen if signer connected, otherwise HOME */
+    {
+        FkState snap = fk_state_snapshot();
+        if (snap.signer_connected && !snap.signer_unlocked)
+            lv_scr_load(s_screens[SCREEN_PIN]);
+        else
+            lv_scr_load(s_screens[SCREEN_HOME]);
+    }
 
     /* Poll thread */
     signal(SIGINT, on_sigint);
@@ -149,12 +159,39 @@ int main(int argc, char *argv[]) {
     pthread_create(&ptid, NULL, poll_thread, NULL);
 
     /* Main loop */
-    uint32_t last_refresh = 0;
+    uint32_t last_refresh  = 0;
+    uint32_t last_activity = lv_tick_get_ms();  /* inactivity timer */
+    uint32_t pin_timeout_ms = (uint32_t)g_config.pin_timeout_sec * 1000;
+
+    /* Track touch activity for inactivity lock */
+    lv_indev_set_read_cb(indev, NULL);  /* keep default evdev, just track time */
+
     while (s_running) {
         lv_task_handler();
 
-        /* Refresh UI every poll interval */
         uint32_t now = lv_tick_get_ms();
+
+        /* Inactivity lock — re-show PIN if signer was unlocked */
+        if (pin_timeout_ms > 0 && (now - last_activity) > pin_timeout_ms) {
+            FkState snap = fk_state_snapshot();
+            if (snap.signer_unlocked && s_current_screen != SCREEN_PIN) {
+                /* Lock the signer */
+                fk_bridge_signer_lock();
+                pthread_mutex_lock(&g_state_mutex);
+                g_state.signer_unlocked = false;
+                pthread_mutex_unlock(&g_state_mutex);
+                fk_nav_to(SCREEN_PIN);
+            }
+            last_activity = now;  /* reset so we don't spam */
+        }
+
+        /* Reset inactivity timer on any touch */
+        lv_indev_data_t indev_data;
+        lv_indev_read(indev, &indev_data);
+        if (indev_data.state == LV_INDEV_STATE_PRESSED)
+            last_activity = now;
+
+        /* Refresh UI every poll interval */
         if (now - last_refresh > (uint32_t)g_config.poll_ms) {
             fk_screens_refresh();
             last_refresh = now;

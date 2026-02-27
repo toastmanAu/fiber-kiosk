@@ -4,7 +4,8 @@
 #pragma once
 
 typedef enum {
-    SCREEN_HOME = 0,
+    SCREEN_PIN = 0,     /* PIN lock — shown first if signer connected */
+    SCREEN_HOME,
     SCREEN_CHANNELS,
     SCREEN_SEND,
     SCREEN_CONFIRM,

@@ -274,10 +274,19 @@ int fk_bridge_signer_unlock(const char *pin, char *err, int errlen) {
     cJSON_Delete(body);
 
     if (!resp) { snprintf(err, errlen, "Bridge unreachable"); return -1; }
-    cJSON *ok = cJSON_GetObjectItem(resp, "unlocked");
-    cJSON *er = cJSON_GetObjectItem(resp, "error");
-    int rc = (ok && cJSON_IsTrue(ok)) ? 0 : -1;
-    if (er && er->valuestring) snprintf(err, errlen, "%s", er->valuestring);
+    cJSON *ok   = cJSON_GetObjectItem(resp, "unlocked");
+    cJSON *er   = cJSON_GetObjectItem(resp, "error");
+    cJSON *wipe = cJSON_GetObjectItem(resp, "wiped");
+    int rc;
+    if (ok && cJSON_IsTrue(ok)) {
+        rc = 0;
+    } else if (wipe && cJSON_IsTrue(wipe)) {
+        rc = -2;  /* keys wiped */
+        snprintf(err, errlen, "Keys wiped — too many attempts");
+    } else {
+        rc = -1;
+        if (er && er->valuestring) snprintf(err, errlen, "%s", er->valuestring);
+    }
     cJSON_Delete(resp);
     return rc;
 }

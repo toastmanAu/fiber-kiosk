@@ -118,8 +118,18 @@ async function unlock(pin) {
     if (!s_connected) return { error: 'Signer not connected' };
     try {
         const r = await _call('unlock', { pin });
+        if (r?.wiped === true) {
+            /* Signer wiped keys — 5 attempts exceeded */
+            s_unlocked  = false;
+            s_connected = false;
+            return { unlocked: false, wiped: true, error: 'Keys wiped — too many attempts' };
+        }
         s_unlocked = r?.unlocked === true;
-        return { unlocked: s_unlocked, session_expires: r?.session_expires };
+        return {
+            unlocked: s_unlocked,
+            session_expires: r?.session_expires,
+            attempts_remaining: r?.attempts_remaining
+        };
     } catch(e) {
         return { unlocked: false, error: e.message };
     }
