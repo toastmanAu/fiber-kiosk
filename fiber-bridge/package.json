@@ -1,0 +1,14 @@
+{
+  "name": "fiber-bridge",
+  "version": "0.1.0",
+  "description": "Local HTTP bridge: Fiber node RPC + ESP32-P4 signer UART",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev":   "node --watch server.js"
+  },
+  "dependencies": {
+    "serialport":              "^12.0.0",
+    "@serialport/parser-readline": "^12.0.0"
+  }
+}

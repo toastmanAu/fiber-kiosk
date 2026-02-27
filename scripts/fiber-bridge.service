@@ -1,0 +1,18 @@
+[Unit]
+Description=Fiber Bridge — Fiber RPC + Signer UART HTTP API
+After=network.target
+
+[Service]
+Type=simple
+User=phill
+WorkingDirectory=/home/phill/fiber-kiosk/fiber-bridge
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+Environment=FIBER_RPC_URL=http://127.0.0.1:8227
+Environment=SIGNER_PORT=/dev/ttyACM0
+Environment=BRIDGE_PORT=7777
+EnvironmentFile=-/etc/fiber-kiosk.env
+
+[Install]
+WantedBy=multi-user.target
